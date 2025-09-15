@@ -1,0 +1,17 @@
+{
+  "bindings": [
+    {
+      "type": "cosmosDBTrigger",
+      "name": "inputDocuments",
+      "direction": "in",
+      "connection": "CosmosDBConnection",
+      "databaseName": "dbcosmoscfp",
+      "containerName": "moimhadocs",
+      "leaseContainerName": "leases",
+      "createLeaseContainerIfNotExists": true,
+      "leaseContainerPrefix": "demo",
+      "maxItemsPerInvocation": 100,
+      "feedPollDelay": 500
+    }
+  ]
+}

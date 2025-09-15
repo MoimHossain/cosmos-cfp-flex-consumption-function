@@ -1,0 +1,10 @@
+using 'main.bicep'
+
+param environmentName = 'flexenvironment'
+param location = 'northeurope'
+param functionAppRuntime = 'custom'
+param functionAppRuntimeVersion = '1.0'
+param resourceGroupName = 'a-rgp-flexenvironment'
+param functionPlanName = 'flexfunctionplan'
+param functionAppName = 'flexfuncmoimha2025sep15'
+param storageAccountName = 'flexstorage2025sep15'
