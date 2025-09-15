@@ -155,8 +155,21 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Build proper custom handler response object
+	resp := map[string]any{
+		"Outputs":     map[string]any{},
+		"Logs":        []string{"cosmos change processed"},
+		"ReturnValue": nil,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	if b, err := json.Marshal(resp); err == nil {
+		w.Write(b)
+	} else {
+		// Fallback minimal body (still JSON) if marshal fails
+		w.Write([]byte("{\"Outputs\":{},\"Logs\":[\"marshal error\"],\"ReturnValue\":null}"))
+	}
 }
 
 func main() {
