@@ -11,6 +11,9 @@
 *.sln.docstates
 *.env
 
+# Bicep compiled output
+Infra/*.json
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
