@@ -1,0 +1,30 @@
+# Build outputs
+bin/
+obj/
+
+# Azure Functions artifacts
+*.azurepubxml
+.azurefunctions/
+
+# Local settings (contains secrets)
+local.settings.json
+# Keep template version
+!local.settings.template.json
+
+# User-specific files
+*.user
+*.suo
+*.sln.docstates
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Visual Studio Code
+.vscode/
