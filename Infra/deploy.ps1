@@ -12,7 +12,7 @@
     The name of the Azure resource group to deploy to
 
 .PARAMETER Location
-    The Azure region to deploy resources to (default: East US)
+    The Azure region to deploy resources to (default: North Europe)
 
 .PARAMETER ProjectName
     The name of the project for resource naming (default: cosmoscfp)
@@ -21,7 +21,7 @@
     The environment name (dev, test, prod) (default: dev)
 
 .EXAMPLE
-    ./deploy.ps1 -ResourceGroupName "rg-cosmoscfp-dev"
+    ./deploy.ps1 -ResourceGroupName "rgpcosmostriggercdp2025" -Location "North Europe"
 
 .EXAMPLE
     ./deploy.ps1 -ResourceGroupName "rg-cosmoscfp-test" -Location "West US 2" -EnvironmentName "test"
@@ -32,7 +32,7 @@ param(
     [string]$ResourceGroupName,
     
     [Parameter(Mandatory = $false)]
-    [string]$Location = "East US",
+    [string]$Location = "North Europe",
     
     [Parameter(Mandatory = $false)]
     [string]$ProjectName = "cosmoscfp",

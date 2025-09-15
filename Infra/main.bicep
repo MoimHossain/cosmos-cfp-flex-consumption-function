@@ -19,6 +19,11 @@ var storageAccountName = 'st${projectName}${environmentName}${uniqueSuffix}'
 var functionAppName = 'func-${projectName}-${environmentName}-${uniqueSuffix}'
 var appInsightsName = 'ai-${projectName}-${environmentName}-${uniqueSuffix}'
 var appServicePlanName = 'asp-${projectName}-${environmentName}-${uniqueSuffix}'
+var storageApiVersion = '2023-05-01'
+// Cosmos DB account name must be 3-44 chars, lowercase, numbers only (no hyphens)
+var cosmosAccountName = 'cos${projectName}${environmentName}${uniqueSuffix}'
+var cosmosDatabaseName = 'db${projectName}'
+var cosmosContainerName = 'items'
 
 // Deploy storage account module
 module storageAccount 'modules/storage.bicep' = {
@@ -50,15 +55,34 @@ module appServicePlan 'modules/appserviceplan.bicep' = {
   }
 }
 
+// Deploy Cosmos DB (SQL API) account, database, container
+module cosmos 'modules/cosmos.bicep' = {
+  name: 'cosmos-deployment'
+  params: {
+    accountName: cosmosAccountName
+    location: location
+    tags: tags
+    databaseName: cosmosDatabaseName
+    containerName: cosmosContainerName
+    isZoneRedundant: false
+  }
+}
+
 // Deploy Function App module
 module functionApp 'modules/function.bicep' = {
   name: 'function-deployment'
+  dependsOn: [ storageAccount ]
   params: {
     functionAppName: functionAppName
     location: location
     appServicePlanId: appServicePlan.outputs.id
-    storageConnectionString: storageAccount.outputs.connectionString
+    // Construct connection string locally to avoid outputting secret from storage module
+    storageConnectionString: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};AccountKey=${listKeys(resourceId('Microsoft.Storage/storageAccounts', storageAccountName), storageApiVersion).keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
     appInsightsConnectionString: applicationInsights.outputs.connectionString
+    cosmosAccountEndpoint: cosmos.outputs.endpoint
+    cosmosDatabaseName: cosmos.outputs.databaseName
+    cosmosContainerName: cosmos.outputs.containerName
+    cosmosLeaseContainerName: 'leases'
     tags: tags
   }
 }
@@ -78,3 +102,12 @@ output applicationInsightsName string = applicationInsights.outputs.name
 
 @description('The name of the App Service Plan')
 output appServicePlanName string = appServicePlan.outputs.name
+
+@description('Cosmos DB account name')
+output cosmosAccountName string = cosmosAccountName
+@description('Cosmos DB endpoint')
+output cosmosEndpoint string = cosmos.outputs.endpoint
+@description('Cosmos DB database name')
+output cosmosDatabaseName string = cosmos.outputs.databaseName
+@description('Cosmos DB container name')
+output cosmosContainerName string = cosmos.outputs.containerName

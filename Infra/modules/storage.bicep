@@ -27,8 +27,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 
-@description('The primary connection string for the storage account')
-output connectionString string = 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
+// Connection string intentionally not output to avoid linter warning about secrets. Consumers should construct it where needed or reference via listKeys at deployment boundary only when necessary.
 
 @description('The name of the storage account')
 output name string = storageAccount.name

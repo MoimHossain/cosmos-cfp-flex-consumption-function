@@ -1,6 +1,5 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
-using Microsoft.Azure.Cosmos;
 using System.Text.Json;
 
 namespace CosmosDbChangeFeedFunction;
@@ -8,17 +7,10 @@ namespace CosmosDbChangeFeedFunction;
 public class CosmosDbChangeFeedFunction
 {
     private readonly ILogger<CosmosDbChangeFeedFunction> _logger;
-    private readonly CosmosClient _cosmosClient;
 
     public CosmosDbChangeFeedFunction(ILogger<CosmosDbChangeFeedFunction> logger)
     {
         _logger = logger;
-        
-        // Read connection string from environment variables
-        var connectionString = Environment.GetEnvironmentVariable("CosmosDbConnectionString") 
-            ?? throw new InvalidOperationException("CosmosDbConnectionString environment variable is required");
-        
-        _cosmosClient = new CosmosClient(connectionString);
     }
 
     [Function("ProcessCosmosDbChanges")]
@@ -30,15 +22,22 @@ public class CosmosDbChangeFeedFunction
             LeaseContainerName = "%LeaseContainerName%",
             CreateLeaseContainerIfNotExists = true)] IReadOnlyList<JsonDocument> input)
     {
+        if (input == null || input.Count == 0)
+        {
+            _logger.LogDebug("Change feed trigger invoked with no documents (heartbeat).");
+            return;
+        }
+
         _logger.LogInformation("Cosmos DB change feed triggered with {count} documents", input.Count);
 
         foreach (var document in input)
         {
             try
             {
-                // Log the document that was changed
+                // Log the document (truncated if large)
                 var documentJson = document.RootElement.GetRawText();
-                _logger.LogInformation("Processing document: {document}", documentJson);
+                var truncated = documentJson.Length > 2048 ? documentJson.Substring(0, 2048) + "...<truncated>" : documentJson;
+                _logger.LogInformation("Processing document: {document}", truncated);
 
                 // Here you can add your business logic to process the changed document
                 // For example:
@@ -73,41 +72,8 @@ public class CosmosDbChangeFeedFunction
             _logger.LogInformation("Document was last modified at: {timestamp}", dateTime);
         }
 
-        // Simulate some processing work
-        await Task.Delay(100);
-        
+        // Simulate async processing work (replace with real logic)
+        await Task.Yield();
         _logger.LogInformation("Document processing completed successfully");
-    }
-
-    /// <summary>
-    /// This method demonstrates how to ensure the lease container exists
-    /// if you need more control over its creation
-    /// </summary>
-    private async Task EnsureLeaseContainerExistsAsync()
-    {
-        try
-        {
-            var databaseName = Environment.GetEnvironmentVariable("DatabaseName") 
-                ?? throw new InvalidOperationException("DatabaseName environment variable is required");
-            var leaseContainerName = Environment.GetEnvironmentVariable("LeaseContainerName") 
-                ?? throw new InvalidOperationException("LeaseContainerName environment variable is required");
-
-            var database = _cosmosClient.GetDatabase(databaseName);
-            var leaseContainer = database.GetContainer(leaseContainerName);
-
-            // Try to read the container to check if it exists
-            await leaseContainer.ReadContainerAsync();
-            _logger.LogInformation("Lease container {containerName} already exists", leaseContainerName);
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            // Container doesn't exist, create it
-            var databaseName = Environment.GetEnvironmentVariable("DatabaseName")!;
-            var leaseContainerName = Environment.GetEnvironmentVariable("LeaseContainerName")!;
-            
-            var database = _cosmosClient.GetDatabase(databaseName);
-            await database.CreateContainerIfNotExistsAsync(leaseContainerName, "/id");
-            _logger.LogInformation("Created lease container {containerName}", leaseContainerName);
-        }
     }
 }

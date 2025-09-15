@@ -7,14 +7,78 @@ param location string = resourceGroup().location
 @description('App Service Plan resource ID')
 param appServicePlanId string
 
-@description('Storage account connection string')
+@description('Storage account connection string (injected as app setting). Avoid passing raw secrets between modules when possible.')
 param storageConnectionString string
 
 @description('Application Insights connection string')
 param appInsightsConnectionString string
 
+@description('Cosmos DB account endpoint (optional)')
+param cosmosAccountEndpoint string = ''
+
+@description('Cosmos DB database name (optional)')
+param cosmosDatabaseName string = ''
+
+@description('Cosmos DB container name (optional)')
+param cosmosContainerName string = ''
+
+@description('Cosmos DB lease container name (optional, for change feed)')
+param cosmosLeaseContainerName string = 'leases'
+
+
 @description('Tags to apply to resources')
 param tags object = {}
+
+var baseAppSettings = [
+  {
+    name: 'AzureWebJobsStorage'
+    value: storageConnectionString
+  }
+  {
+    name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+    value: appInsightsConnectionString
+  }
+]
+
+var cosmosSettings = concat(
+  empty(cosmosAccountEndpoint) ? [] : [
+    {
+      name: 'COSMOS_ACCOUNT_ENDPOINT'
+      value: cosmosAccountEndpoint
+    }
+  ],
+  empty(cosmosDatabaseName) ? [] : [
+    {
+      name: 'COSMOS_DATABASE_NAME'
+      value: cosmosDatabaseName
+    }
+  ],
+  empty(cosmosContainerName) ? [] : [
+    {
+      name: 'COSMOS_CONTAINER_NAME'
+      value: cosmosContainerName
+    }
+  ],
+  empty(cosmosLeaseContainerName) ? [] : [
+    {
+      name: 'LeaseContainerName'
+      value: cosmosLeaseContainerName
+    }
+  ],
+  empty(cosmosDatabaseName) ? [] : [
+    {
+      name: 'DatabaseName'
+      value: cosmosDatabaseName
+    }
+  ],
+  empty(cosmosContainerName) ? [] : [
+    {
+      name: 'ContainerName'
+      value: cosmosContainerName
+    }
+  ],
+  []
+)
 
 resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   name: functionAppName
@@ -23,16 +87,8 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
   kind: 'functionapp,linux'
   properties: {
     serverFarmId: appServicePlanId
+    // Removed one-deploy storage hosting block to allow classic zip deployment
     functionAppConfig: {
-      deployment: {
-        storage: {
-          type: 'blobContainer'
-          value: storageConnectionString
-          authentication: {
-            type: 'StorageAccountConnectionString'
-          }
-        }
-      }
       scaleAndConcurrency: {
         maximumInstanceCount: 100
         instanceMemoryMB: 2048
@@ -43,25 +99,7 @@ resource functionApp 'Microsoft.Web/sites@2023-12-01' = {
       }
     }
     siteConfig: {
-      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
-      appSettings: [
-        {
-          name: 'AzureWebJobsStorage'
-          value: storageConnectionString
-        }
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~4'
-        }
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: 'dotnet-isolated'
-        }
-        {
-          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-          value: appInsightsConnectionString
-        }
-      ]
+      appSettings: concat(baseAppSettings, cosmosSettings)
     }
   }
 }
