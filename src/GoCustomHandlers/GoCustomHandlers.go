@@ -94,10 +94,26 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	writeFuncResponse := func(w http.ResponseWriter, logs []string) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]any{
+			"Outputs":     map[string]any{},
+			"Logs":        logs,
+			"ReturnValue": nil,
+		}
+		if b, err := json.Marshal(resp); err == nil {
+			w.WriteHeader(http.StatusOK)
+			w.Write(b)
+		} else {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("{\"Outputs\":{},\"Logs\":[\"marshal error\"],\"ReturnValue\":null}"))
+		}
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		fmt.Printf("cosmos error=read_body_failed err=%v\n", err)
-		http.Error(w, "failed to read body", http.StatusBadRequest)
+		writeFuncResponse(w, []string{"read body failed"})
 		return
 	}
 	if verbose {
@@ -114,7 +130,7 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	var inv cosmosInvocation
 	if err := json.Unmarshal(body, &inv); err != nil {
 		fmt.Printf("cosmos level=warn msg=wrapper_unmarshal_failed err=%v\n", err)
-		// Try legacy direct array
+		// Try legacy direct array body form
 		var direct []cosmosDoc
 		if err2 := json.Unmarshal(body, &direct); err2 == nil {
 			fmt.Printf("cosmos mode=direct_array docs=%d latency_ms=%d\n", len(direct), time.Since(start).Milliseconds())
@@ -125,27 +141,38 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 					fmt.Printf("cosmos doc_index=%d id=%s tenantId=%s etag=%s\n", i, d.ID, d.TenantID, d.Etag)
 				}
 			}
+			writeFuncResponse(w, []string{"processed direct array"})
+			return
 		} else {
 			fmt.Printf("cosmos level=error msg=direct_array_unmarshal_failed err=%v\n", err2)
 		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("processed"))
+		writeFuncResponse(w, []string{"wrapper unmarshal failed"})
 		return
 	}
 
 	rawDocs, ok := inv.Data["inputDocuments"]
 	if !ok {
 		fmt.Printf("cosmos level=info msg=no_input_documents latency_ms=%d\n", time.Since(start).Milliseconds())
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("no docs"))
+		writeFuncResponse(w, []string{"no input documents"})
 		return
 	}
 
 	var docs []cosmosDoc
-	if err := json.Unmarshal(rawDocs, &docs); err != nil {
-		fmt.Printf("cosmos level=error msg=docs_unmarshal_failed err=%v raw_fragment=%s\n", err, string(rawDocs))
-	} else {
-		fmt.Printf("cosmos level=info msg=change_received doc_count=%d latency_ms=%d\n", len(docs), time.Since(start).Milliseconds())
+	unmarshalErr := json.Unmarshal(rawDocs, &docs)
+	if unmarshalErr != nil {
+		// Check if rawDocs is a quoted JSON string containing the array
+		var embedded string
+		if err2 := json.Unmarshal(rawDocs, &embedded); err2 == nil {
+			if err3 := json.Unmarshal([]byte(embedded), &docs); err3 == nil {
+				fmt.Printf("cosmos level=info msg=change_received wrapped_string_array=true doc_count=%d latency_ms=%d\n", len(docs), time.Since(start).Milliseconds())
+			} else {
+				fmt.Printf("cosmos level=error msg=embedded_array_unmarshal_failed err=%v raw_fragment=%s\n", err3, string(rawDocs))
+			}
+		} else {
+			fmt.Printf("cosmos level=error msg=docs_unmarshal_failed err=%v raw_fragment=%s\n", unmarshalErr, string(rawDocs))
+		}
+	}
+	if len(docs) > 0 {
 		for i, d := range docs {
 			if verbose {
 				fmt.Printf("cosmos level=debug doc_index=%d id=%s tenantId=%s etag=%s size_bytes=%d data=%s\n", i, d.ID, d.TenantID, d.Etag, len(d.Data), string(d.Data))
@@ -155,21 +182,7 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build proper custom handler response object
-	resp := map[string]any{
-		"Outputs":     map[string]any{},
-		"Logs":        []string{"cosmos change processed"},
-		"ReturnValue": nil,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if b, err := json.Marshal(resp); err == nil {
-		w.Write(b)
-	} else {
-		// Fallback minimal body (still JSON) if marshal fails
-		w.Write([]byte("{\"Outputs\":{},\"Logs\":[\"marshal error\"],\"ReturnValue\":null}"))
-	}
+	writeFuncResponse(w, []string{"cosmos change processed"})
 }
 
 func main() {
