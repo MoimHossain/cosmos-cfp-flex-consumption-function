@@ -71,19 +71,6 @@ func timerTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonResponse)
 }
 
-// Structures to parse custom handler invocation wrapper for bindings
-type cosmosInvocation struct {
-	Data     map[string]json.RawMessage `json:"Data"`
-	Metadata map[string]any             `json:"Metadata"`
-}
-
-type cosmosDoc struct {
-	ID       string          `json:"id"`
-	TenantID string          `json:"tenantId"`
-	Data     json.RawMessage `json:"data"`
-	Etag     string          `json:"_etag"`
-}
-
 func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	verbose := true
@@ -94,95 +81,36 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeFuncResponse := func(w http.ResponseWriter, logs []string) {
-		w.Header().Set("Content-Type", "application/json")
-		resp := map[string]any{
-			"Outputs":     map[string]any{},
-			"Logs":        logs,
-			"ReturnValue": nil,
-		}
-		if b, err := json.Marshal(resp); err == nil {
-			w.WriteHeader(http.StatusOK)
-			w.Write(b)
-		} else {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("{\"Outputs\":{},\"Logs\":[\"marshal error\"],\"ReturnValue\":null}"))
-		}
-	}
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		fmt.Printf("cosmos error=read_body_failed err=%v\n", err)
-		writeFuncResponse(w, []string{"read body failed"})
-		return
 	}
+	invID := r.Header.Get("X-Azure-Functions-InvocationId")
+	if invID != "" {
+		fmt.Printf("cosmos meta=invocation id=%s\n", invID)
+	}
+	// Always log raw payload exactly as received (respecting verbosity for size-only)
 	if verbose {
 		fmt.Printf("cosmos stage=received raw_bytes=%d payload=%s\n", len(body), string(body))
 	} else {
 		fmt.Printf("cosmos stage=received raw_bytes=%d\n", len(body))
 	}
+	fmt.Printf("cosmos action=logged_only duration_ms=%d\n", time.Since(start).Milliseconds())
 
-	invID := r.Header.Get("X-Azure-Functions-InvocationId")
-	if invID != "" {
-		fmt.Printf("cosmos meta=invocation id=%s\n", invID)
+	// Build minimal Azure Functions custom handler response
+	w.Header().Set("Content-Type", "application/json")
+	resp := map[string]any{
+		"Outputs":     map[string]any{},
+		"Logs":        []string{"logged raw cosmos payload"},
+		"ReturnValue": nil,
 	}
-
-	var inv cosmosInvocation
-	if err := json.Unmarshal(body, &inv); err != nil {
-		fmt.Printf("cosmos level=warn msg=wrapper_unmarshal_failed err=%v\n", err)
-		// Try legacy direct array body form
-		var direct []cosmosDoc
-		if err2 := json.Unmarshal(body, &direct); err2 == nil {
-			fmt.Printf("cosmos mode=direct_array docs=%d latency_ms=%d\n", len(direct), time.Since(start).Milliseconds())
-			for i, d := range direct {
-				if verbose {
-					fmt.Printf("cosmos doc_index=%d id=%s tenantId=%s etag=%s data=%s\n", i, d.ID, d.TenantID, d.Etag, string(d.Data))
-				} else {
-					fmt.Printf("cosmos doc_index=%d id=%s tenantId=%s etag=%s\n", i, d.ID, d.TenantID, d.Etag)
-				}
-			}
-			writeFuncResponse(w, []string{"processed direct array"})
-			return
-		} else {
-			fmt.Printf("cosmos level=error msg=direct_array_unmarshal_failed err=%v\n", err2)
-		}
-		writeFuncResponse(w, []string{"wrapper unmarshal failed"})
-		return
+	if b, err := json.Marshal(resp); err == nil {
+		w.WriteHeader(http.StatusOK)
+		w.Write(b)
+	} else {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("{\"Outputs\":{},\"Logs\":[\"marshal error\"],\"ReturnValue\":null}"))
 	}
-
-	rawDocs, ok := inv.Data["inputDocuments"]
-	if !ok {
-		fmt.Printf("cosmos level=info msg=no_input_documents latency_ms=%d\n", time.Since(start).Milliseconds())
-		writeFuncResponse(w, []string{"no input documents"})
-		return
-	}
-
-	var docs []cosmosDoc
-	unmarshalErr := json.Unmarshal(rawDocs, &docs)
-	if unmarshalErr != nil {
-		// Check if rawDocs is a quoted JSON string containing the array
-		var embedded string
-		if err2 := json.Unmarshal(rawDocs, &embedded); err2 == nil {
-			if err3 := json.Unmarshal([]byte(embedded), &docs); err3 == nil {
-				fmt.Printf("cosmos level=info msg=change_received wrapped_string_array=true doc_count=%d latency_ms=%d\n", len(docs), time.Since(start).Milliseconds())
-			} else {
-				fmt.Printf("cosmos level=error msg=embedded_array_unmarshal_failed err=%v raw_fragment=%s\n", err3, string(rawDocs))
-			}
-		} else {
-			fmt.Printf("cosmos level=error msg=docs_unmarshal_failed err=%v raw_fragment=%s\n", unmarshalErr, string(rawDocs))
-		}
-	}
-	if len(docs) > 0 {
-		for i, d := range docs {
-			if verbose {
-				fmt.Printf("cosmos level=debug doc_index=%d id=%s tenantId=%s etag=%s size_bytes=%d data=%s\n", i, d.ID, d.TenantID, d.Etag, len(d.Data), string(d.Data))
-			} else {
-				fmt.Printf("cosmos level=debug doc_index=%d id=%s tenantId=%s etag=%s size_bytes=%d\n", i, d.ID, d.TenantID, d.Etag, len(d.Data))
-			}
-		}
-	}
-
-	writeFuncResponse(w, []string{"cosmos change processed"})
 }
 
 func main() {
