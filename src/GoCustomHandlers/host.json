@@ -2,9 +2,9 @@
 	"version": "2.0",
 	"retry": {
 		"strategy": "exponentialBackoff",
-		"maxRetryAttempts": 5,
-		"maxRetryCount": 3,
-		"delay": "PT1S"
+		"maxRetryCount": 5,
+		"minimumInterval": "00:00:02",
+		"maximumInterval": "00:00:30"
 	},
 	"healthMonitor": {
 		"enabled": true,
