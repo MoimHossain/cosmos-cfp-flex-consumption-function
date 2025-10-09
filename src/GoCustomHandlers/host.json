@@ -19,7 +19,7 @@
 			}
 		},
 		"logLevel": {
-			"Host.Triggers.CosmosDB": "Warning"
+			"Host.Triggers.CosmosDB": "Debug"
 		}		
 	},
 	"extensionBundle": {
