@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -71,6 +72,36 @@ func timerTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonResponse)
 }
 
+// cosmosEnvelope models only the fields we care about for logging & retry behavior.
+type cosmosEnvelope struct {
+	Data struct {
+		InputDocuments string `json:"inputDocuments"` // Escaped JSON string of array of docs
+	} `json:"Data"`
+	Metadata struct {
+		RetryContext struct {
+			RetryCount int `json:"RetryCount"`
+		} `json:"RetryContext"`
+	} `json:"Metadata"`
+}
+
+func unescapeDocuments(raw string) ([]map[string]any, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	// The host sends an escaped JSON array embedded in a string
+	s := raw
+	if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") {
+		if uq, err := strconv.Unquote(s); err == nil {
+			s = uq
+		}
+	}
+	var arr []map[string]any
+	if err := json.Unmarshal([]byte(s), &arr); err != nil {
+		return nil, err
+	}
+	return arr, nil
+}
+
 func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	verbose := true
@@ -89,28 +120,67 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	if invID != "" {
 		fmt.Printf("cosmos meta=invocation id=%s\n", invID)
 	}
-	// Always log raw payload exactly as received (respecting verbosity for size-only)
 	if verbose {
 		fmt.Printf("cosmos stage=received raw_bytes=%d payload=%s\n", len(body), string(body))
 	} else {
 		fmt.Printf("cosmos stage=received raw_bytes=%d\n", len(body))
 	}
-	fmt.Printf("cosmos action=logged_only duration_ms=%d\n", time.Since(start).Milliseconds())
 
-	// Build minimal Azure Functions custom handler response
+	// Parse outer envelope
+	var env cosmosEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
+		fmt.Printf("cosmos error=envelope_unmarshal err=%v\n", err)
+	}
+
+	docs, derr := unescapeDocuments(env.Data.InputDocuments)
+	if derr != nil {
+		fmt.Printf("cosmos error=input_docs_parse err=%v\n", derr)
+	}
+
+	retryCount := env.Metadata.RetryContext.RetryCount
+	attempt := retryCount + 1
+	failing := false
+	logSummaries := []string{}
+
+	for _, d := range docs {
+		id, _ := d["id"].(string)
+		txn, _ := d["transaction"].(string)
+		// Attempt log
+		fmt.Printf("cosmos doc_attempt id=%s attempt=%d retryCount=%d\n", id, attempt, retryCount)
+		if txn == "fail" {
+			fmt.Printf("cosmos doc_status id=%s transaction=fail action=will_fail_invocation\n", id)
+			logSummaries = append(logSummaries, fmt.Sprintf("id=%s transaction=fail", id))
+			failing = true
+		} else if txn == "pass" {
+			fmt.Printf("cosmos doc_status id=%s transaction=pass\n", id)
+			logSummaries = append(logSummaries, fmt.Sprintf("id=%s transaction=pass", id))
+		} else {
+			fmt.Printf("cosmos doc_status id=%s transaction=%s (no special action)\n", id, txn)
+			logSummaries = append(logSummaries, fmt.Sprintf("id=%s transaction=%s", id, txn))
+		}
+	}
+
+	durMs := time.Since(start).Milliseconds()
+	if failing {
+		fmt.Printf("cosmos final status=failure docs=%d duration_ms=%d\n", len(docs), durMs)
+	} else {
+		fmt.Printf("cosmos final status=success docs=%d duration_ms=%d\n", len(docs), durMs)
+	}
+
+	// Build response (even on failure we include structured body; non-200 signals retry)
 	w.Header().Set("Content-Type", "application/json")
 	resp := map[string]any{
 		"Outputs":     map[string]any{},
-		"Logs":        []string{"logged raw cosmos payload"},
-		"ReturnValue": nil,
+		"Logs":        append([]string{fmt.Sprintf("processed %d docs attempt=%d", len(docs), attempt)}, logSummaries...),
+		"ReturnValue": map[string]any{"documentCount": len(docs), "attempt": attempt, "retryCount": retryCount},
 	}
-	if b, err := json.Marshal(resp); err == nil {
-		w.WriteHeader(http.StatusOK)
-		w.Write(b)
+	b, _ := json.Marshal(resp)
+	if failing {
+		w.WriteHeader(http.StatusInternalServerError)
 	} else {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{\"Outputs\":{},\"Logs\":[\"marshal error\"],\"ReturnValue\":null}"))
 	}
+	w.Write(b)
 }
 
 func main() {
