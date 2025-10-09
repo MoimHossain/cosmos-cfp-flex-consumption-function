@@ -3,6 +3,7 @@
 	"retry": {
 		"strategy": "exponentialBackoff",
 		"maxRetryAttempts": 5,
+		"maxRetryCount": 3,
 		"delay": "PT1S"
 	},
 	"healthMonitor": {
@@ -12,24 +13,27 @@
 		"healthCheckThreshold": 6,
 		"counterThreshold": 0.80
 	},
+	"cosmosDB": {
+		"userAgentSuffix": "MOIMHA-CFP-DEMO"
+	},
 	"logging": {
 		"applicationInsights": {
 			"samplingSettings": {
-				"isEnabled": true				
+				"isEnabled": true
 			}
 		},
 		"logLevel": {
 			"Host.Triggers.CosmosDB": "Debug"
-		}		
+		}
 	},
 	"extensionBundle": {
 		"id": "Microsoft.Azure.Functions.ExtensionBundle",
 		"version": "[4.*, 5.0.0)"
 	},
-	"customHandler": {	    
+	"customHandler": {
 		"description": {
 			"defaultExecutablePath": "GoCustomHandlers"
 		},
-		"enableForwardingHttpRequest":true
+		"enableForwardingHttpRequest": true
 	}
 }
