@@ -1,27 +1,3 @@
-Created 4 todos
-
-Ran `microsoft_docs_search` 
-Completed with input: {
-  "query": "Azure Cosmos DB change feed guarantees at least once ordering partitions"
-}
-
-Optimizing tool selection...
-
-Starting (2/4) *Search functions trigger*
-
-Ran Microsoft Docs Search 
-Completed with input: {
-  "query": "Azure Functions Cosmos DB trigger at least once delivery semantics retry behavior unhandled exception"
-}
-
-Starting (3/4) *Gather full-fidelity info*
-
-Ran Microsoft Docs Search 
-Completed with input: {
-  "query": "Cosmos DB change feed deletes full fidelity all versions and deletes mode reliability"
-}
-
-Starting (4/4) *Synthesize answer*
 
 ## Short answer
 
