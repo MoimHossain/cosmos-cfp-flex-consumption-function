@@ -1,0 +1,29 @@
+
+###
+POST https://localhost:62875/api/publishEvents
+Content-Type: application/json
+
+{
+    "id": "12345",
+    "transaction": "purchase",
+    "account": "user@example.com",
+    "amount": 99.99
+}
+
+
+###
+GET https://localhost:62875/health
+Content-Type: application/json
+
+
+### Docker local
+POST http://localhost:8787/api/publishEvents
+Content-Type: application/json
+
+{
+    "id": "12345",
+    "transaction": "purchase",
+    "account": "user@example.com",
+    "amount": 99.99
+}
+

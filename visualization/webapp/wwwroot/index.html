@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Realtime Event Stream</title>
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <!-- Using jsDelivr for SignalR client; integrity omitted to avoid mismatch issues, pin exact version -->
+  <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.0/dist/browser/signalr.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    body { font-feature-settings: "ss01"; }
+    tbody tr { transition: background-color .4s ease; }
+    tbody tr.flash { background-color: #ecfccb; }
+  </style>
+</head>
+<body class="h-full flex flex-col bg-slate-950 text-slate-100">
+  <header class="p-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 shadow-lg">
+    <h1 class="text-2xl font-bold tracking-wide">⚡ Realtime Event Notifications</h1>
+    <p class="text-sm opacity-90">Live updates via Azure SignalR</p>
+  </header>
+  <main class="flex-1 overflow-hidden p-4 flex flex-col gap-4">
+    <section class="flex items-center gap-4 flex-wrap">
+      <div class="bg-slate-800/60 border border-slate-700 rounded px-4 py-2 text-sm">Connection: <span id="connState" class="font-semibold text-amber-300">connecting...</span></div>
+      <div class="grow"></div>
+      <button id="clearBtn" class="px-4 py-2 text-sm rounded bg-slate-700 hover:bg-slate-600 border border-slate-500">Clear</button>
+    </section>
+    <div class="flex-1 overflow-auto rounded-lg border border-slate-800 shadow-inner bg-slate-900/60">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-800/70 text-slate-200 sticky top-0 backdrop-blur">
+          <tr>
+            <th class="px-3 py-2 text-left font-semibold">Time (UTC)</th>
+            <th class="px-3 py-2 text-left font-semibold">Id</th>
+            <th class="px-3 py-2 text-left font-semibold">Transaction</th>
+            <th class="px-3 py-2 text-left font-semibold">Account</th>
+            <th class="px-3 py-2 text-right font-semibold">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="rows" class="divide-y divide-slate-800"></tbody>
+      </table>
+    </div>
+  </main>
+  <footer class="p-3 text-center text-xs text-slate-500">Built with ASP.NET Core & Azure SignalR</footer>
+
+<script>
+  const stateEl = document.getElementById('connState');
+  const rowsEl = document.getElementById('rows');
+  const clearBtn = document.getElementById('clearBtn');
+  clearBtn.addEventListener('click', () => { rowsEl.innerHTML = ''; });
+
+  function formatAmount(a){ return new Intl.NumberFormat(undefined,{minimumFractionDigits:2, maximumFractionDigits:2}).format(a); }
+
+  function addRow(evt){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1 whitespace-nowrap text-emerald-300 font-mono">${new Date(evt.receivedUtc).toISOString().split('T')[1].replace('Z','')}</td>
+      <td class="px-3 py-1 font-mono text-sky-300">${evt.id}</td>
+      <td class="px-3 py-1">${evt.transaction}</td>
+      <td class="px-3 py-1">${evt.account}</td>
+      <td class="px-3 py-1 text-right font-semibold text-amber-200">${formatAmount(evt.amount)}</td>`;
+    rowsEl.prepend(tr);
+    tr.classList.add('flash');
+    setTimeout(()=> tr.classList.remove('flash'), 600);
+  }
+
+  async function start(){
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl('/hub/notifications')
+      .withAutomaticReconnect()
+      .build();
+
+    connection.onreconnecting(()=> stateEl.textContent = 'reconnecting...');
+    connection.onreconnected(()=> stateEl.textContent = 'connected');
+    connection.onclose(()=> stateEl.textContent = 'closed');
+
+    connection.on('eventNotification', evt => {
+      addRow(evt);
+    });
+
+    try{
+      await connection.start();
+      stateEl.textContent = 'connected';
+    }catch(err){
+      console.error(err);
+      stateEl.textContent = 'failed';
+      setTimeout(start, 3000);
+    }
+  }
+  start();
+</script>
+</body>
+</html>
