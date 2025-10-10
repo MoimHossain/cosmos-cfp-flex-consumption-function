@@ -420,3 +420,4 @@ FodyWeavers.xsd
 *.msm
 *.msp
 src/GoCustomHandlers/local.settings.json
+/visualization/webapp/Properties/launchSettings.json
