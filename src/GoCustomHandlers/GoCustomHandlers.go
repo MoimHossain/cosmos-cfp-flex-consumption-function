@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -142,6 +143,37 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 	failing := false
 	logSummaries := []string{}
 
+	// helper to POST document to visualization endpoint
+	postEvent := func(doc map[string]any) {
+		endpoint := "https://cosmosdb-changefeed-visualizer.wonderfulplant-6b5cf838.northeurope.azurecontainerapps.io/api/publishEvents"
+		payload := map[string]any{}
+		if v, ok := doc["id"]; ok { payload["id"] = v }
+		if v, ok := doc["transaction"]; ok { payload["transaction"] = v }
+		if v, ok := doc["account"]; ok { payload["account"] = v }
+		if v, ok := doc["amount"]; ok { payload["amount"] = v }
+
+		b, err := json.Marshal(payload)
+		if err != nil {
+			fmt.Printf("visualizer error=marshal err=%v\n", err)
+			return
+		}
+		client := &http.Client{Timeout: 5 * time.Second}
+		req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(b))
+		if err != nil {
+			fmt.Printf("visualizer error=request_build err=%v\n", err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("visualizer error=post err=%v\n", err)
+			return
+		}
+		defer resp.Body.Close()
+		io.Copy(io.Discard, resp.Body)
+		fmt.Printf("visualizer status=posted id=%v http_status=%d\n", payload["id"], resp.StatusCode)
+	}
+
 	for _, d := range docs {
 		id, _ := d["id"].(string)
 		txn, _ := d["transaction"].(string)
@@ -158,6 +190,9 @@ func cosmosChangeTriggerHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("cosmos doc_status id=%s transaction=%s (no special action)\n", id, txn)
 			logSummaries = append(logSummaries, fmt.Sprintf("id=%s transaction=%s", id, txn))
 		}
+
+		// Post each document to visualization endpoint (non-blocking for overall logic; errors logged only)
+		postEvent(d)
 	}
 
 	durMs := time.Since(start).Milliseconds()
