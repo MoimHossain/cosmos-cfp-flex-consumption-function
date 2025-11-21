@@ -32,7 +32,7 @@
 	},
 	"customHandler": {
 		"description": {
-			"defaultExecutablePath": "GoCustomHandlers"
+			"defaultExecutablePath": "main"
 		},
 		"enableForwardingHttpRequest": true
 	}
