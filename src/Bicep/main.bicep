@@ -18,6 +18,14 @@ param functionPlanName string
 param functionAppName string
 @minLength(1)
 param storageAccountName string
+param userAssignedIdentityName string = ''
+param cosmosAccountName string = ''
+@minLength(1)
+param cosmosDatabaseName string = 'buutdb'
+@minLength(1)
+param cosmosContainerName string = 'jardocuments'
+@minLength(1)
+param cosmosLeaseContainerName string = 'jarevents'
 
 @minValue(40)
 @maxValue(1000)
@@ -31,6 +39,9 @@ var resourceToken = toLower(uniqueString(subscription().id, environmentName, loc
 var appName = !empty(functionAppName) ? functionAppName : '${shortGuid}${abbrs.webSitesFunctions}${resourceToken}'
 // Generate a unique container name that will be used for deployments.
 var deploymentStorageContainerName = 'app-package-${take(toLower(appName), 32)}-${take(resourceToken, 7)}'
+var userAssignedIdentityFinalName = !empty(userAssignedIdentityName) ? userAssignedIdentityName : '${abbrs.managedIdentityUserAssignedIdentities}${resourceToken}'
+var cosmosAccountBaseName = !empty(cosmosAccountName) ? toLower(cosmosAccountName) : '${abbrs.documentDBDatabaseAccounts}${resourceToken}'
+var cosmosAccountFinalName = take(replace(cosmosAccountBaseName, '-', ''), 44)
 // tags that should be applied to all resources.
 var tags = {
   // Tag all resources with the environment name.
@@ -68,6 +79,20 @@ module monitoring 'core/monitor/monitoring.bicep' = {
   }
 }
 
+module cosmos 'core/cosmos/account.bicep' = {
+  name: 'cosmos'
+  scope: rg
+  params: {
+    accountName: cosmosAccountFinalName
+    location: location
+    tags: tags
+    databaseName: cosmosDatabaseName
+    containerName: cosmosContainerName
+    leaseContainerName: cosmosLeaseContainerName
+    partitionKeyPath: '/userid'
+  }
+}
+
 // Azure Functions Flex Consumption
 module flexFunction 'core/host/function.bicep' = {
   name: 'functionapp'
@@ -83,6 +108,11 @@ module flexFunction 'core/host/function.bicep' = {
     functionAppRuntime: functionAppRuntime
     functionAppRuntimeVersion: functionAppRuntimeVersion
     maximumInstanceCount: maximumInstanceCount
-    shortGuid: shortGuid
+    userAssignedIdentityName: userAssignedIdentityFinalName
+    cosmosAccountName: cosmos.outputs.accountName
+    cosmosAccountEndpoint: cosmos.outputs.documentEndpoint
+    cosmosDatabaseName: cosmos.outputs.databaseName
+    cosmosContainerName: cosmos.outputs.containerName
+    cosmosLeaseContainerName: cosmos.outputs.leaseContainerName
   }
 }
