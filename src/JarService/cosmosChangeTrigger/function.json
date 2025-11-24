@@ -7,7 +7,7 @@
       "connection": "CosmosDBConnection",
       "databaseName": "buutdb",
       "containerName": "jardocuments",
-      "leaseContainerName": "jarevents",
+      "leaseContainerName": "eventlistenerlease",
       "changeFeedMode": "AllVersionsAndDeletes",
       "createLeaseContainerIfNotExists": true,
       "leaseContainerPrefix": "demo",

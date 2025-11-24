@@ -25,7 +25,7 @@ param cosmosDatabaseName string = 'buutdb'
 @minLength(1)
 param cosmosContainerName string = 'jardocuments'
 @minLength(1)
-param cosmosLeaseContainerName string = 'jarevents'
+param cosmosLeaseContainerName string = 'eventlistenerlease'
 
 @minValue(40)
 @maxValue(1000)
