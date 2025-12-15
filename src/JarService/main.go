@@ -8,6 +8,7 @@ import (
 
 	simple "github.com/MoimHossain/cosmos-cfp-flex-consumption-function/JarService/SimpleHttpTrigger"
 	cosmos "github.com/MoimHossain/cosmos-cfp-flex-consumption-function/JarService/cosmosChangeTrigger"
+	eventhub "github.com/MoimHossain/cosmos-cfp-flex-consumption-function/JarService/eventHubTrigger"
 	timer "github.com/MoimHossain/cosmos-cfp-flex-consumption-function/JarService/timerTrigger"
 )
 
@@ -23,6 +24,11 @@ func main() {
 	mux.HandleFunc("/cosmosChangeTrigger", cosmos.Handler)
 	mux.HandleFunc("/Functions.cosmosChangeTrigger", cosmos.Handler)
 	mux.HandleFunc("/api/Functions.cosmosChangeTrigger", cosmos.Handler)
+
+	mux.HandleFunc("/api/eventHubTrigger", eventhub.Handler)
+	mux.HandleFunc("/eventHubTrigger", eventhub.Handler)
+	mux.HandleFunc("/Functions.eventHubTrigger", eventhub.Handler)
+	mux.HandleFunc("/api/Functions.eventHubTrigger", eventhub.Handler)
 
 	mux.HandleFunc("/api/timerTrigger", timer.Handler)
 	mux.HandleFunc("/timerTrigger", timer.Handler)
