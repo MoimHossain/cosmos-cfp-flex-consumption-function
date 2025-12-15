@@ -25,7 +25,11 @@ param cosmosDatabaseName string = 'buutdb'
 @minLength(1)
 param cosmosContainerName string = 'jardocuments'
 @minLength(1)
-param cosmosLeaseContainerName string = 'eventlistenerlease'
+param cosmosLeaseContainerName string = 'latesteventlistenerlease'
+param eventHubNamespaceName string = ''
+param eventHubName string = ''
+@minLength(1)
+param eventHubSharedAccessPolicyName string = 'appclient'
 
 @minValue(40)
 @maxValue(1000)
@@ -42,6 +46,8 @@ var deploymentStorageContainerName = 'app-package-${take(toLower(appName), 32)}-
 var userAssignedIdentityFinalName = !empty(userAssignedIdentityName) ? userAssignedIdentityName : '${abbrs.managedIdentityUserAssignedIdentities}${resourceToken}'
 var cosmosAccountBaseName = !empty(cosmosAccountName) ? toLower(cosmosAccountName) : '${abbrs.documentDBDatabaseAccounts}${resourceToken}'
 var cosmosAccountFinalName = take(replace(cosmosAccountBaseName, '-', ''), 44)
+var eventHubNamespaceFinalName = !empty(eventHubNamespaceName) ? eventHubNamespaceName : '${abbrs.eventHubNamespaces}${resourceToken}'
+var eventHubFinalName = !empty(eventHubName) ? eventHubName : '${abbrs.eventHubNamespacesEventHubs}${resourceToken}'
 // tags that should be applied to all resources.
 var tags = {
   // Tag all resources with the environment name.
@@ -93,6 +99,18 @@ module cosmos 'core/cosmos/account.bicep' = {
   }
 }
 
+module eventHub 'core/eventhub/eventhub.bicep' = {
+  name: 'eventhub'
+  scope: rg
+  params: {
+    namespaceName: eventHubNamespaceFinalName
+    eventHubName: eventHubFinalName
+    location: location
+    tags: tags
+    sharedAccessPolicyName: eventHubSharedAccessPolicyName
+  }
+}
+
 // Azure Functions Flex Consumption
 module flexFunction 'core/host/function.bicep' = {
   name: 'functionapp'
@@ -114,5 +132,12 @@ module flexFunction 'core/host/function.bicep' = {
     cosmosDatabaseName: cosmos.outputs.databaseName
     cosmosContainerName: cosmos.outputs.containerName
     cosmosLeaseContainerName: cosmos.outputs.leaseContainerName
+    eventHubNamespaceName: eventHub.outputs.namespaceName
+    eventHubName: eventHub.outputs.eventHubName
+    eventHubFullyQualifiedNamespace: eventHub.outputs.namespaceFqdn
   }
 }
+
+output eventHubNamespaceName string = eventHub.outputs.namespaceName
+output eventHubName string = eventHub.outputs.eventHubName
+output eventHubConnectionString string = eventHub.outputs.sharedAccessPrimaryConnectionString

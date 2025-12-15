@@ -14,6 +14,9 @@ param cosmosAccountEndpoint string
 param cosmosDatabaseName string
 param cosmosContainerName string
 param cosmosLeaseContainerName string
+param eventHubNamespaceName string
+param eventHubName string
+param eventHubFullyQualifiedNamespace string
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
   name: storageAccountName
@@ -25,6 +28,15 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
 
 resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' existing = {
   name: cosmosAccountName
+}
+
+resource eventHubNamespace 'Microsoft.EventHub/namespaces@2024-05-01-preview' existing = {
+  name: eventHubNamespaceName
+}
+
+resource eventHub 'Microsoft.EventHub/namespaces/eventhubs@2024-05-01-preview' existing = {
+  name: eventHubName
+  parent: eventHubNamespace
 }
 
 resource flexFuncPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
@@ -111,6 +123,22 @@ resource flexFuncApp 'Microsoft.Web/sites@2023-12-01' = {
           value: cosmosLeaseContainerName
         }
         {
+          name: 'EventHubConnection__fullyQualifiedNamespace'
+          value: eventHubFullyQualifiedNamespace
+        }
+        {
+          name: 'EventHubConnection__eventHubName'
+          value: eventHubName
+        }
+        {
+          name: 'EventHubConnection__credential'
+          value: 'managedidentity'
+        }
+        {
+          name: 'EventHubConnection__clientId'
+          value: userAssignedIdentity.properties.clientId
+        }
+        {
           name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
           value: applicationInsights.properties.ConnectionString
         }
@@ -179,6 +207,7 @@ resource storageRoleAssignmentsUser 'Microsoft.Authorization/roleAssignments@202
 }]
 
 var cosmosDataContributorRoleDefinitionId = '${cosmosAccount.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002'
+var eventHubDataReceiverRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a638d3c7-ab3a-418d-83e6-5f17a39d4fde')
 
 resource cosmosRoleAssignmentSystem 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2023-03-15-preview' = {
   name: guid(cosmosAccount.id, flexFuncApp.id, cosmosDatabaseName, 'cosmos-data-contributor-sys')
@@ -197,6 +226,26 @@ resource cosmosRoleAssignmentUser 'Microsoft.DocumentDB/databaseAccounts/sqlRole
     principalId: userAssignedIdentity.properties.principalId
     roleDefinitionId: cosmosDataContributorRoleDefinitionId
     scope: '${cosmosAccount.id}/dbs/${cosmosDatabaseName}'
+  }
+}
+
+resource eventHubRoleAssignmentSystem 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid(eventHub.id, flexFuncApp.name, 'eventhub-data-receiver-sys')
+  scope: eventHub
+  properties: {
+    roleDefinitionId: eventHubDataReceiverRoleDefinitionId
+    principalId: flexFuncApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource eventHubRoleAssignmentUser 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid(eventHub.id, userAssignedIdentity.name, 'eventhub-data-receiver-uai')
+  scope: eventHub
+  properties: {
+    roleDefinitionId: eventHubDataReceiverRoleDefinitionId
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 
