@@ -62,11 +62,11 @@ az deployment sub create --name deployment1 --location eastus --template-file ma
 ## Build Steps
 
 ```
-cd GoCustomHandlers
-go build -o GoCustomHandlers GoCustomHandlers.go
+cd JarService
+go build -o main .
 func start
 ```
-> Note: It is important to keep the output file name as GoCustomHandlers as it is configured in the function.json file
+> Note: It is important to keep the output file name as main as it is configured in the function.json file
 
 ## Deploy function app to Azure
 
@@ -79,9 +79,9 @@ We need to build the Go file for Linux to ensure compatibility with the Flex Con
 ```powershell
 $env:GOOS = "linux"
 $env:GOARCH = "amd64"
-cd GoCustomHandlers
-go build -o GoCustomHandlers GoCustomHandlers.go
-func azure functionapp publish {FunctionAppName}
+
+go build -o main .
+func azure functionapp publish buutdemo-jar-service --resource-group buutdemo
 ```
 
 ### 2. Azure CLI
@@ -93,21 +93,78 @@ We need to use a special zip utility if we want to use Azure CLI from windows fo
 $env:GOOS = "linux"
 $env:GOARCH = "amd64"
 cd GoCustomHandlers
-go build -o GoCustomHandlers GoCustomHandlers.go
-cd ..
-.\ZipUtility\ZipUtility.ps1 -SourceDirectory "{FullPath}\GoCustomHandlers" -OutputZipPath "{PathToZipFile}" -ExecutableFiles GoCustomHandlers
-az functionapp deployment source config-zip --resource-group {ResourceGropName} --name {AppName} --src "{PathToZipFile}"
-```
-
-Sample
-```powershell 
-.\ZipUtility\ZipUtility.ps1 -SourceDirectory "C:\root\CustomHandlerFlex\GoCustomHandlers" -OutputZipPath "C:\root\CustomHandlerFlex\out.zip" -ExecutableFiles GoCustomHandlers
+go build -o main .
+func azure functionapp publish buutdemo-jar-service --resource-group buutdemo
 ```
 
 #### Linux
 
 ```Bash
-cd GoCustomHandlers
-go build -o GoCustomHandlers GoCustomHandlers.go
-az functionapp deployment source config-zip --resource-group {ResourceGropName} --name {AppName} --src "{PathToZipFile}"
+go build -o main .
+func azure functionapp publish buutdemo-jar-service --resource-group buutdemo
+```
+    
+
+### Checking the cosmos DB feed
+
+For all version and deletes (preview):
+
+Change in host.json:
+
+```
+    "id": "Microsoft.Azure.Functions.ExtensionBundle.Preview",
+    "version": "[4.0.0, 5.0.0)"
+```
+Change in function.json:
+
+```
+{
+  "bindings": [
+    {
+      "type": "cosmosDBTrigger",
+      "name": "inputDocuments",
+      "direction": "in",
+      "connection": "CosmosDBConnection",
+      "databaseName": "buutdb",
+      "containerName": "jardocuments",
+      "leaseContainerName": "eventlistenerlease",
+      "changeFeedMode": "AllVersionsAndDeletes",
+      "createLeaseContainerIfNotExists": true,
+      "leaseContainerPrefix": "demo",
+      "maxItemsPerInvocation": 100,
+      "feedPollDelay": 500
+    }
+  ]
+}
+```
+
+without All version and delete:
+
+Change in host.json:
+
+```
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+```
+
+Change in function.json:
+
+```
+{
+  "bindings": [
+    {
+      "type": "cosmosDBTrigger",
+      "name": "inputDocuments",
+      "direction": "in",
+      "connection": "CosmosDBConnection",
+      "databaseName": "buutdb",
+      "containerName": "jardocuments",
+      "leaseContainerName": "latesteventlistenerlease",
+      "createLeaseContainerIfNotExists": true,
+      "leaseContainerPrefix": "demo",
+      "maxItemsPerInvocation": 100,
+      "feedPollDelay": 500
+    }
+  ]
+}
 ```
